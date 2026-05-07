@@ -159,19 +159,18 @@ affy_to_hgnc <- function(affy_vector) {
 #' `1 202860_at   DENND4B good        7.16      ...`
 #' `2 204340_at   TMEM187 good        6.40      ...`
 reduce_data <- function(expr_tibble, names_ids, good_genes, bad_genes){
-  # 1. Identify the probe ID column name in expr_tibble (assumed to be the first)
-  probe_col <- colnames(expr_tibble)[1]
-  # Identify the probe ID column in names_ids (assumed to be the first)
-  map_probe_col <- colnames(names_ids)[1]
-  # Identify the gene symbol column in names_ids (assumed to be the second)
+  # 1. Identify existing column names dynamically
+  first_col_expr <- colnames(expr_tibble)[1]
+  map_affy_col <- colnames(names_ids)[1]
   map_hgnc_col <- colnames(names_ids)[2]
   
-  # 2. Join the expression data with the HGNC mapping
-  # We use inner_join to keep only probes that actually have a mapping
-  reduced_tibble <- expr_tibble %>%
-    inner_join(names_ids, by = setNames(map_probe_col, probe_col)) %>%
+  # 2. Join and transform
+  reduced <- expr_tibble %>%
+    # Join the expression data with the mapping table
+    inner_join(names_ids, by = setNames(map_affy_col, first_col_expr)) %>%
+    # Rename the HGNC column to the required 'hgnc'
     rename(hgnc = !!sym(map_hgnc_col)) %>%
-    # 3. Create the gene_set column and filter
+    # Categorize the genes
     mutate(
       gene_set = case_when(
         hgnc %in% good_genes ~ "good",
@@ -179,12 +178,12 @@ reduce_data <- function(expr_tibble, names_ids, good_genes, bad_genes){
         TRUE ~ NA_character_
       )
     ) %>%
-    # 4. Remove rows that are neither good nor bad
+    # Drop genes not in our lists
     filter(!is.na(gene_set)) %>%
-    # 5. Reorder columns so probeids, hgnc, and gene_set are at the front
-    select(probeids = !!sym(probe_col), hgnc, gene_set, everything())
+    # IMPORTANT: Ensure the first column is named 'probeids' for the next function
+    select(probeids = !!sym(first_col_expr), hgnc, gene_set, everything())
   
-  return(reduced_tibble)
+  return(reduced)
 }
 
 #' Convert a wide format tibble to long for easy plotting
@@ -198,8 +197,7 @@ reduce_data <- function(expr_tibble, names_ids, good_genes, bad_genes){
 #'
 #' @examples
 convert_to_long <- function(tibble) {
-  # We use pivot_longer to collapse the sample columns.
-  # we exclude the three metadata columns from being pivoted.
+  # This will pivot all columns EXCEPT probeids, hgnc, and gene_set
   long_tibble <- tibble %>%
     pivot_longer(
       cols = -c(probeids, hgnc, gene_set), 
