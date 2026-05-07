@@ -1,8 +1,6 @@
 #!/usr/bin/Rscript
-## Author: Taylor Falk
-## tfalk@bu.edu
-## BU BF591
-## Assignment Bioinformatics Basics
+## Author: Swathy Selvakumar
+
 
 #### Bioconductor ####
 # it is standard among R packages to define libraries and packages at the 
@@ -35,7 +33,13 @@ suppressPackageStartupMessages(library(tidyverse))
 #' @examples 
 #' `data <- load_expression('/project/bf528/project_1/data/example_intensity_data.csv')`
 load_expression <- function(filepath) {
-    return(NULL)
+  data <- read_csv(filepath, show_col_types = FALSE)
+  
+  if (startsWith(colnames(data)[1], "...")) {
+    colnames(data)[1] <- "probe_id"
+  }
+  
+  return(data)
 }
 
 #' Filter 15% of the gene expression values.
@@ -51,7 +55,23 @@ load_expression <- function(filepath) {
 #' `tibble [40,158 × 1] (S3: tbl_df/tbl/data.frame)`
 #' `$ probe: chr [1:40158] "1007_s_at" "1053_at" "117_at" "121_at" ...`
 filter_15 <- function(tibble){
-    return(NULL)
+  # 1. Separate the probe names from the numeric data
+  # Assumes the first column contains the probe IDs
+  probe_names <- tibble[[1]]
+  expr_matrix <- as.matrix(tibble[, -1])
+  
+  # 2. Define the threshold
+  threshold <- log2(15)
+  
+  # 3. Calculate the proportion of samples per row exceeding the threshold
+  # rowSums returns how many samples > log2(15)
+  # Dividing by ncol(expr_matrix) gives the percentage/proportion
+  passing_indices <- rowSums(expr_matrix > threshold) / ncol(expr_matrix) >= 0.15
+  
+  # 4. Return as a tibble with a single column named 'probe'
+  filtered_probes <- tibble(probe = probe_names[passing_indices])
+  
+  return(filtered_probes)
 }
 
 #### Gene name conversion ####
@@ -79,7 +99,32 @@ filter_15 <- function(tibble){
 #' `4        1553551_s_at      MT-ND2`
 #' `5           202860_at     DENND4B`
 affy_to_hgnc <- function(affy_vector) {
-    return(NULL)
+  # 1. Convert tibble column to a flat character vector
+  # Using [[1]] ensures we get the vector regardless of column name
+  affy_ids <- affy_vector[[1]]
+  
+  # 2. Connect to Ensembl (using the Human dataset)
+  # Clear cache
+  biomaRt::biomartCacheClear()
+  mart <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+  
+  # 3. Perform the query
+  # filters: the type of ID we are providing
+  # attributes: the data we want to retrieve
+  res <- getBM(
+    attributes = c('affy_hg_u133_plus_2', 'hgnc_symbol'),
+    filters = 'affy_hg_u133_plus_2',
+    values = affy_ids,
+    mart = mart
+  )
+  
+  # 4. Convert result to tibble and handle potential empty returns
+  res_tibble <- as_tibble(res)
+  
+  # Optional: Filter out empty HGNC symbols if desired
+  # res_tibble <- res_tibble %>% filter(hgnc_symbol != "")
+  
+  return(res_tibble)
 }
 
 #' Reduce a tibble of expression data to only the rows in good_genes or bad_genes.
@@ -112,7 +157,32 @@ affy_to_hgnc <- function(affy_vector) {
 #' `1 202860_at   DENND4B good        7.16      ...`
 #' `2 204340_at   TMEM187 good        6.40      ...`
 reduce_data <- function(expr_tibble, names_ids, good_genes, bad_genes){
-    return(NULL)
+  # 1. Identify the probe ID column name in expr_tibble (assumed to be the first)
+  probe_col <- colnames(expr_tibble)[1]
+  # Identify the probe ID column in names_ids (assumed to be the first)
+  map_probe_col <- colnames(names_ids)[1]
+  # Identify the gene symbol column in names_ids (assumed to be the second)
+  map_hgnc_col <- colnames(names_ids)[2]
+  
+  # 2. Join the expression data with the HGNC mapping
+  # We use inner_join to keep only probes that actually have a mapping
+  reduced_tibble <- expr_tibble %>%
+    inner_join(names_ids, by = setNames(map_probe_col, probe_col)) %>%
+    rename(hgnc = !!sym(map_hgnc_col)) %>%
+    # 3. Create the gene_set column and filter
+    mutate(
+      gene_set = case_when(
+        hgnc %in% good_genes ~ "good",
+        hgnc %in% bad_genes ~ "bad",
+        TRUE ~ NA_character_
+      )
+    ) %>%
+    # 4. Remove rows that are neither good nor bad
+    filter(!is.na(gene_set)) %>%
+    # 5. Reorder columns so probeids, hgnc, and gene_set are at the front
+    select(probeids = !!sym(probe_col), hgnc, gene_set, everything())
+  
+  return(reduced_tibble)
 }
 
 #' Convert a wide format tibble to long for easy plotting
@@ -126,6 +196,15 @@ reduce_data <- function(expr_tibble, names_ids, good_genes, bad_genes){
 #'
 #' @examples
 convert_to_long <- function(tibble) {
-    return(NULL)
+  # We use pivot_longer to collapse the sample columns.
+  # we exclude the three metadata columns from being pivoted.
+  long_tibble <- tibble %>%
+    pivot_longer(
+      cols = -c(probeids, hgnc, gene_set), 
+      names_to = "sample", 
+      values_to = "expression"
+    )
+  
+  return(long_tibble)
 }
 
