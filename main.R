@@ -181,7 +181,7 @@ reduce_data <- function(expr_tibble, names_ids, good_genes, bad_genes){
     # Drop genes not in our lists
     filter(!is.na(gene_set)) %>%
     # IMPORTANT: Ensure the first column is named 'probeids' for the next function
-    select(probeids = !!sym(first_col_expr), hgnc, gene_set, everything())
+    select(!!sym(first_col_expr), hgnc, gene_set, everything())
   
   return(reduced)
 }
@@ -197,12 +197,14 @@ reduce_data <- function(expr_tibble, names_ids, good_genes, bad_genes){
 #'
 #' @examples
 convert_to_long <- function(tibble) {
-  # This will pivot all columns EXCEPT probeids, hgnc, and gene_set
+  # Identify the non-sample columns (everything except the sample expression columns)
+  id_cols <- c(colnames(tibble)[1], "hgnc", "gene_set")
+  
   long_tibble <- tibble %>%
     pivot_longer(
-      cols = -c(probeids, hgnc, gene_set), 
-      names_to = "sample", 
-      values_to = "expression"
+      cols = -all_of(id_cols),
+      names_to = "sample",
+      values_to = "value"
     )
   
   return(long_tibble)
