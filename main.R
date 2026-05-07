@@ -106,7 +106,9 @@ affy_to_hgnc <- function(affy_vector) {
   # 2. Connect to Ensembl (using the Human dataset)
   # Clear cache
   biomaRt::biomartCacheClear()
-  mart <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+  mart <- useEnsembl(biomart = "genes", 
+                     dataset = "hsapiens_gene_ensembl", 
+                     mirror = "useast")
   
   # 3. Perform the query
   # filters: the type of ID we are providing
