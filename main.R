@@ -168,8 +168,6 @@ reduce_data <- function(expr_tibble, names_ids, good_genes, bad_genes){
   reduced <- expr_tibble %>%
     # Join the expression data with the mapping table
     inner_join(names_ids, by = setNames(map_affy_col, first_col_expr)) %>%
-    # Rename the HGNC column to the required 'hgnc'
-    rename(hgnc = !!sym(map_hgnc_col)) %>%
     # Categorize the genes
     mutate(
       gene_set = case_when(
@@ -198,7 +196,7 @@ reduce_data <- function(expr_tibble, names_ids, good_genes, bad_genes){
 #' @examples
 convert_to_long <- function(tibble) {
   # Identify the non-sample columns (everything except the sample expression columns)
-  id_cols <- c(colnames(tibble)[1], "hgnc", "gene_set")
+  id_cols <- c(colnames(tibble)[1], colnames(tibble)[2], "gene_set")
   
   long_tibble <- tibble %>%
     pivot_longer(
