@@ -159,27 +159,21 @@ affy_to_hgnc <- function(affy_vector) {
 #' `1 202860_at   DENND4B good        7.16      ...`
 #' `2 204340_at   TMEM187 good        6.40      ...`
 reduce_data <- function(expr_tibble, names_ids, good_genes, bad_genes){
-  # 1. Identify existing column names dynamically
   first_col_expr <- colnames(expr_tibble)[1]
   map_affy_col <- colnames(names_ids)[1]
   map_hgnc_col <- colnames(names_ids)[2]
   
-  # 2. Join and transform
   reduced <- expr_tibble %>%
-    # Join the expression data with the mapping table
     inner_join(names_ids, by = setNames(map_affy_col, first_col_expr)) %>%
-    # Categorize the genes
     mutate(
       gene_set = case_when(
-        hgnc %in% good_genes ~ "good",
-        hgnc %in% bad_genes ~ "bad",
+        .data[[map_hgnc_col]] %in% good_genes ~ "good",
+        .data[[map_hgnc_col]] %in% bad_genes ~ "bad",
         TRUE ~ NA_character_
       )
     ) %>%
-    # Drop genes not in our lists
     filter(!is.na(gene_set)) %>%
-    # IMPORTANT: Ensure the first column is named 'probeids' for the next function
-    select(!!sym(first_col_expr), hgnc, gene_set, everything())
+    select(!!sym(first_col_expr), !!sym(map_hgnc_col), gene_set, everything())
   
   return(reduced)
 }
